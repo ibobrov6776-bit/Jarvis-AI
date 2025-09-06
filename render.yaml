@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: jarvis-ai
+    env: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: BRAVE_KEY
+        sync: false
+      - key: ACCESS_PIN
+        sync: false
