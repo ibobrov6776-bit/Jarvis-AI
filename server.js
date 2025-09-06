@@ -252,14 +252,9 @@ app.post("/api/assist", async (req,res)=>{
 /* ---------- start ---------- */
 app.get("/healthz", (req,res)=>res.json({ ok:true, time:new Date().toISOString() }));
 const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server ready: http://0.0.0.0:${PORT}`);
   console.log(`🔎 Health:  http://0.0.0.0:${PORT}/healthz`);
   console.log(`ℹ️  Meta:    http://0.0.0.0:${PORT}/api/meta`);
-});
-
-  console.log(`BRAVE len=${k.len} ascii=${k.ascii}`);
-  console.log(`✅ Server ready: http://localhost:${PORT}`);
-  console.log(`🔎 Health:  http://localhost:${PORT}/healthz`);
-  console.log(`ℹ️  Meta:    http://localhost:${PORT}/api/meta`);
 });
