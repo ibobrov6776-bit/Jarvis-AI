@@ -1,0 +1,11 @@
+{
+  "ignore": [
+    ".git",
+    "node_modules",
+    "backup"
+  ],
+  "watch": ["server.js", "public"],
+  "ext": "js,html,css",
+  "exec": "node server.js",
+  "signal": "SIGTERM"
+}

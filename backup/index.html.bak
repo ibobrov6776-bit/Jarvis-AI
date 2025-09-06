@@ -1,0 +1,250 @@
+  <meta charset="utf-8" />
+  <title>JARVIS — чаты и профиль</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background:#0f1115; color:#e8e8ea; }
+    .app { display:grid; grid-template-columns: 260px 1fr 300px; min-height:100vh; }
+    .sidebar, .profile { background:#11141b; padding:14px; }
+    .sidebar { border-right:1px solid #242838; }
+    .profile { border-left:1px solid #242838; }
+    .chat-list { display:flex; flex-direction:column; gap:6px; max-height:calc(100vh - 160px); overflow:auto; }
+    .chat-item { padding:8px 10px; border-radius:8px; background:#1a1f2b; cursor:pointer; }
+    .chat-item.active { background:#2a3555; }
+    .btn { margin-top:6px; width:100%; padding:8px; border:none; border-radius:8px; cursor:pointer; }
+    .btn.primary { background:#2a6df4; color:#fff; }
+    .btn.danger { background:#4d1f1f; color:#fbb; }
+    .main { display:flex; flex-direction:column; padding:14px; }
+    .log { flex:1; border:1px solid #242838; border-radius:8px; padding:10px; background:#0e121b; white-space:pre-wrap; overflow:auto; }
+    .composer { display:flex; gap:8px; margin-top:10px; }
+    .input { flex:1; padding:10px; border-radius:8px; border:1px solid #2b324a; background:#0f131d; color:#fff; }
+    .pill { padding:2px 8px; border:1px solid #444; border-radius:999px; font-size:12px; margin-left:8px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h3>💬 Чаты</h3>
+      <div class="chat-list" id="chatList"></div>
+      <button class="btn primary" id="newChat">➕ Новый чат</button>
+      <button class="btn" id="renameChat">✏️ Переименовать</button>
+      <button class="btn danger" id="deleteChat">🗑 Удалить</button>
+    </aside>
+
+    <main class="main">
+      <h2 id="chatTitle">Новый чат <span id="stylePill" class="pill">стиль: авто</span></h2>
+      <div class="log" id="log"></div>
+      <div class="composer">
+        <input id="ask" class="input" placeholder="Напиши сообщение..." />
+        <button class="btn primary" id="send">Отправить</button>
+      </div>
+    </main>
+
+    <aside class="profile">
+      <h3>👤 Профиль</h3>
+      <p>Статус: <b id="status">—</b></p>
+      <p>Стиль: <b id="currentStyle">—</b></p>
+      <h4>Возможности:</h4>
+    const askEl = document.getElementById('ask');
+    const sendEl = document.getElementById('send');
+    const logEl = document.getElementById('log');
+    const chatTitleEl = document.getElementById('chatTitle');
+    const stylePillEl = document.getElementById('stylePill');
+    const statusEl = document.getElementById('status');
+    const currentStyleEl = document.getElementById('currentStyle');
+    const capListEl = document.getElementById('capList');
+    const chatListEl = document.getElementById('chatList');
+
+    let currentChatId = null;
+    function uuid(){ return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8); }
+    function getStore(){ return JSON.parse(localStorage.getItem("jarvisChats")||"{}"); }
+    function setStore(v){ localStorage.setItem("jarvisChats", JSON.stringify(v)); }
+
+    function renderChatList(){
+      const store = getStore();
+      chatListEl.innerHTML = "";
+      for(const [id,chat] of Object.entries(store)){
+        const div = document.createElement("div");
+        div.className="chat-item"+(id===currentChatId?" active":"");
+        div.textContent=chat.title;
+        div.onclick=()=>setActiveChat(id);
+        chatListEl.appendChild(div);
+      }
+    }
+    function setActiveChat(id){
+      const store = getStore();
+      const chat = store[id]; if(!chat) return;
+      currentChatId=id;
+      chatTitleEl.firstChild.textContent=chat.title+" ";
+      logEl.textContent=chat.messages||"";
+      renderChatList();
+    }
+    function append(text){
+      const store = getStore();
+      const chat = store[currentChatId];
+      chat.messages=(chat.messages||"")+text;
+      setStore(store);
+      logEl.textContent=chat.messages;
+      logEl.scrollTop=logEl.scrollHeight;
+    }
+
+    async function sendMessage(q){
+      append(`🧑‍💬: ${q}\n`);
+      try{
+        const r=await fetch("/api/assist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q})});
+        const d=await r.json();
+        append(`🤖: ${d.reply}\n\n`);
+        if(d.style){
+          const txt=d.style==="friendly"?"дружеский":"официальный";
+          stylePillEl.textContent="стиль: "+txt;
+          currentStyleEl.textContent=txt;
+        }
+        if(Array.isArray(d.actions)){
+          const a=d.actions.find(x=>x.type==="open_url");
+          if(a) append(`🔗 Источник: ${a.url}\n\n`);
+        }
+      }catch{ append("🤖: Сервер недоступен.\n\n"); }
+    }
+
+    sendEl.onclick=()=>{ const q=askEl.value.trim(); if(!q)return; askEl.value=""; sendMessage(q); };
+    askEl.addEventListener("keydown",e=>{ if(e.key==="Enter") sendEl.click(); });
+
+    document.getElementById("newChat").onclick=()=>{
+      const store=getStore(); const id=uuid();
+      store[id]={title:"Новый чат",messages:""}; setStore(store); setActiveChat(id);
+    };
+    document.getElementById("renameChat").onclick=()=>{
+      if(!currentChatId)return;
+      const store=getStore(); const n=prompt("Новое имя",store[currentChatId].title);
+      if(n){store[currentChatId].title=n; setStore(store); renderChatList(); chatTitleEl.firstChild.textContent=n+" "; }
+    };
+    document.getElementById("deleteChat").onclick=()=>{
+      if(!currentChatId)return;
+      if(!confirm("Удалить чат?"))return;
+      const store=getStore(); delete store[currentChatId]; setStore(store);
+      const ids=Object.keys(store); if(ids.length)setActiveChat(ids[0]); else document.getElementById("newChat").click();
+    };
+
+    async function loadMeta(){
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+      try        statusEl.textContent=j.status||"online";
+    }
+
+    (function init(){
+      const store=getStore();
+      if(!Object.keys(store).length){
+        const id=uuid(); store[id]={title:"Первый чат",messages:""}; setStore(store); currentChatId=id;
+      } else currentChatId=Object.keys(store)[0];
+      setActiveChat(currentChatId); renderChatList(); loadMeta();
+    })();
+  </script>
+</body>
+</html>

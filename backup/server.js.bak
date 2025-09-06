@@ -1,0 +1,187 @@
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+import { fetch } from "undici";
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
+
+const BRAVE_KEY = (process.env.BRAVE_KEY || "").trim();
+const PORT = process.env.PORT || 3000;
+
+/* ---------- Утилиты ---------- */
+function normalizeText(text) {
+  const dict = {
+    "че":"что","чо":"что","шо":"что","изи":"легко","топчик":"очень хорошо",
+    "видос":"видео","го":"давай","лютый":"очень сильный","как жизнь":"как дела"
+  };
+  let norm = (text || "").toLowerCase().trim();
+  for (const [slang, normal] of Object.entries(dict)) {
+    norm = norm.replace(new RegExp(`\\b${slang}\\b`, "gi"), normal);
+  }
+  return norm;
+}
+
+function detectStyleAuto(text) {
+  const t = (text || "").toLowerCase();
+  const isShort = t.split(/\s+/).filter(Boolean).length <= 6;
+  const hasSlang = /(че|чо|изи|топчик|го|нормас|лютый|чел|бро|лол|ахах)/.test(t);
+  const polite = /(пожалуйста|не могли бы|будьте добры|здравствуйте)/.test(t) || /\bвы\b/.test(t);
+  if (polite && !hasSlang) return "formal";
+  if (hasSlang || isShort) return "friendly";
+  return "formal";
+}
+function applyStyleLock(autoStyle, styleLock) {
+  if (styleLock === "friendly" || styleLock === "formal") return styleLock;
+  return autoStyle; // 'auto'
+}
+function isAscii(str) { return typeof str === "string" && /^[\x00-\x7F]*$/.test(str); }
+
+/* ---------- Детектор намерения ---------- */
+function detectIntent(query) {
+  const q = normalizeText(query);
+  if (!q) return "EMPTY";
+
+  if (/(^|\s)(привет|здравствуй|здравствуйте|йо|хай|прив|дарова)\b/.test(q)) return "GREETING";
+  if (/(как дела|что нового|как ты|как жизнь)/.test(q)) return "HOW_ARE_YOU";
+  if (/\b(время|который час|сколько время|сколько времени)\b/.test(q)) return "TIME";
+  if (/\b(спасибо|благодарю|мерси)\b/.test(q)) return "THANKS";
+  if (/\b(пока|до встречи|увидимся|бай)\b/.test(q)) return "BYE";
+
+  if (/(новости|тренды|ситуация|объясни|расскажи( про| об)?|найди|поищи|google|в гугле|в интернете|браузер)/.test(q)) {
+    return "WEB_SEARCH";
+  }
+  const isQuestion = /(\?|кто|что|где|когда|почему|зачем|как)\b/.test(q);
+  if (isQuestion && q.split(/\s+/).length >= 4) return "WEB_SEARCH";
+
+  if (q.split(/\s+/).length <= 3) return "SMALL_TALK";
+
+  return "GENERAL_CHAT";
+}
+
+/* ---------- Brave Search ---------- */
+async function braveSearch(q) {
+  if (!BRAVE_KEY || !isAscii(BRAVE_KEY)) {
+    return { disabled: true, items: [] };
+  }
+  const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(q)}&count=3&freshness=day`;
+  const res = await fetch(url, { headers: { "X-Subscription-Token": BRAVE_KEY } });
+  if (!res.ok) {
+    const body = await res.text().catch(()=> "");
+    throw new Error(`Brave API ${res.status}: ${body}`);
+  }
+  const data = await res.json();
+  const items = (data.web?.results ?? []).map(r => ({
+    title: r.title, url: r.url, snippet: r.snippet || r.description || ""
+  }));
+  return { disabled: false, items };
+}
+
+/* ---------- Health / Meta ---------- */
+app.get("/healthz", (_req,res)=>res.json({ok:true,time:new Date().toISOString()}));
+app.get("/api/meta", (_req,res)=>res.json({
+  capabilities:[
+    "Веб-поиск (новости, тренды, политика) — один чёткий ответ + ссылка",
+    "Понимание сленга и коротких фраз",
+    "Авто-стиль: дружеский или официальный (можно зафиксировать)",
+    "Локальные ответы: привет, как дела, время, спасибо, пока"
+  ],
+  status:"online",
+  web_search_enabled: !!(BRAVE_KEY && isAscii(BRAVE_KEY))
+}));
+
+/* ---------- Ассистент ---------- */
+app.post("/api/assist", async (req,res)=>{
+  try{
+    const query = (req.body?.query || "").trim();
+    const styleLock = (req.body?.styleLock || "auto");
+    if (!query) return res.status(400).json({ reply: "Пустой запрос.", style: "formal", actions: [] });
+
+    const intent = detectIntent(query);
+    const autoStyle = detectStyleAuto(query);
+    const style = applyStyleLock(autoStyle, styleLock);
+
+    if (intent === "GREETING") {
+      const text = style === "friendly" ? "Йо! 👋 Рад тебя видеть 😎" : "Здравствуйте!";
+      return res.json({ reply: text, style, actions: [] });
+    }
+
+    if (intent === "HOW_ARE_YOU") {
+      const text = style === "friendly"
+        ? "Да нормас, всё чётко 😎 А у тебя как?"
+        : "У меня всё хорошо, спасибо. Как у вас дела?";
+      return res.json({ reply: text, style, actions: [] });
+    }
+
+    if (intent === "TIME") {
+      const now = new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+      const text = style === "friendly" ? `Бро, сейчас ${now} 😉` : `Сейчас ${now}.`;
+      return res.json({ reply: text, style, actions: [] });
+    }
+
+    if (intent === "THANKS") {
+      const text = style === "friendly" ? "Пожалуйста! 🙌" : "Пожалуйста.";
+      return res.json({ reply: text, style, actions: [] });
+    }
+
+    if (intent === "BYE") {
+      const text = style === "friendly" ? "До связи! 👋" : "До свидания!";
+      return res.json({ reply: text, style, actions: [] });
+    }
+
+    if (intent === "SMALL_TALK") {
+      const text = style === "friendly"
+        ? "Понял 👍 Спроси что-то конкретнее."
+        : "Понимаю. Уточните, пожалуйста.";
+      return res.json({ reply: text, style, actions: [] });
+    }
+
+    if (intent === "GENERAL_CHAT") {
+      const text = style === "friendly"
+        ? "Окей, понял тебя. Могу добавить фактов или ссылок, если надо 😉"
+        : "Понимаю. Если нужно, могу добавить справку или ссылки.";
+      return res.json({ reply: text, style, actions: [] });
+    }
+
+    // WEB_SEARCH
+    const clean = normalizeText(query);
+    const { disabled, items } = await braveSearch(clean);
+    if (disabled) {
+      const msg = style==="friendly"
+        ? "Поиск в сети выключен (нет/неверный ключ)."
+        : "Поиск в интернете временно недоступен (нет/неверный ключ).";
+      return res.json({ reply: msg, style, actions: [] });
+    }
+    if (!items.length) {
+      const msg = style==="friendly" ? `Не нашёл ничего по «${query}» 😅` : `Ничего не найдено по запросу «${query}».`;
+      return res.json({ reply: msg, style, actions: [] });
+    }
+
+    const top = items[0];
+    const reply = style==="friendly"
+      ? `Вот что нашёл по «${query}»: ${top.snippet || "инфы маловато"}\n👉 ${top.url}`
+      : `По запросу «${query}»: ${top.snippet || "нет описания"}\nПодробнее: ${top.url}`;
+
+    return res.json({ reply, style, actions: [{ type:"open_url", url: top.url }] });
+
+  } catch(e) {
+    console.error("❌ /api/assist error:", e);
+    return res.status(500).json({ reply:"Ошибка при обработке запроса.", style:"formal", actions:[] });
+  }
+});
+
+/* ---------- Запуск ---------- */
+app.listen(PORT, ()=> {
+  console.log(`✅ Server ready: http://localhost:${PORT}`);
+  console.log(`🔎 Health:  http://localhost:${PORT}/healthz`);
+  console.log(`ℹ️  Meta:    http://localhost:${PORT}/api/meta`);
+});

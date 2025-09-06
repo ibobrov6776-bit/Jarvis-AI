@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JARVIS</title>
+<style>
+  :root{ --bg:#0f1117;--sidebar:#0b0f14;--panel:#111826;--panel-2:#0c1320;--accent:#10a37f;--text:#e6e7e9;--muted:#a0a8b8;--line:#1f2a3a;--user:#1b273a;--bot:#121a28;--danger:#e05260;}
+  :root[data-theme="light"]{ --bg:#f7f8fb;--sidebar:#f1f3f8;--panel:#ffffff;--panel-2:#f6f7fb;--accent:#0f9150;--text:#0e1320;--muted:#4a5670;--line:#e2e6f0;--user:#e9eef9;--bot:#f4f6fb;--danger:#d04556;}
+  *{box-sizing:border-box} html,body{height:100%} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+
+  /* базовый (десктоп) */
+  .app{display:grid;grid-template-columns:260px 1fr;height:100vh}
+  .side{background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+  .side .top{padding:12px;border-bottom:1px solid var(--line);display:flex;gap:8px}
+  .btn{display:inline-flex;align-items:center;gap:8px;background:var(--panel-2);color:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .btn:hover{filter:brightness(1.08)}
+  .search{padding:10px 12px;border-bottom:1px solid var(--line)}
+  .search input{width:100%;padding:8px 10px;border:1px solid #1c2942;border-radius:10px;background:#0d1626;color:#e6e7e9}
+  :root[data-theme="light"] .search input{background:#fff;border-color:#c9d4ea;color:#0e1320}
+  .chats{flex:1;overflow:auto;padding:8px}
+  .sectionTitle{padding:6px 10px;color:#9fb2d3;font-size:11px;opacity:.9}
+  .chat-item{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:10px;border-radius:10px;border:1px solid transparent;cursor:pointer;color:var(--text)}
+  .chat-item:hover{background:#0f1826;border-color:#152238}
+  .chat-item.active{background:#0f1d2f;border-color:#1c2a44}
+  .chat-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .chat-actions{display:flex;gap:8px;opacity:.85}
+  .pin,.del{cursor:pointer}
+
+  .main{display:grid;grid-template-rows:auto 1fr auto;min-width:0}
+  .head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0e1726,transparent);position:sticky;top:0;z-index:10}
+  .brand{font-weight:600}
+  .sep{flex:1}
+  .select{background:#0d1626;border:1px solid #1c2942;border-radius:10px;padding:8px 10px;color:#e9eef9}
+  .tabs{display:flex;gap:8px;margin-left:12px}
+  .tab{padding:6px 10px;border:1px solid #1c2942;border-radius:10px;background:#0d1626;color:#cbd3e5;cursor:pointer}
+  .tab.active{color:#fff;border-color:#2a385a;background:#14203a}
+  .banner{display:none;align-items:center;gap:10px;margin:10px auto 0;max-width:820px;color:#fff;background:#2b1b22;border:1px solid #4a2b39;padding:8px 12px;border-radius:10px}
+
+  .msgs{padding:18px;overflow:auto;background:var(--panel)}
+  .msg{max-width:820px;margin:0 auto 14px}
+  .bubble{border-radius:16px;padding:12px 14px;border:1px solid #1c273b;background:var(--bot);white-space:pre-wrap;word-break:break-word;position:relative}
+  .me .bubble{background:var(--user)}
+  .meta{margin-top:6px;color:var(--muted);font-size:11px;display:flex;gap:8px;align-items:center}
+  .ibadge{font-size:10px;line-height:1;padding:3px 6px;border-radius:999px;border:1px solid #2a3550;background:#0d1626;color:#cbd3e5}
+  .actions{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}
+  .action{font-size:12px;text-decoration:none;color:#dfe7ff;background:#0d1626;border:1px solid #1c2942;border-radius:10px;padding:6px 10px}
+  .typing{display:none;color:var(--muted);font-size:12px;margin:8px auto;max-width:820px}
+  .typing.on{display:block}
+  .statusbar{max-width:820px;margin:6px auto 8px auto;padding:6px 10px;border-radius:10px;border:1px solid #1c2942;background:#0d1626;color:#cbd3e5;font-size:12px;display:none}
+  .statusbar.on{display:block}
+
+  .composer{display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--line);padding:12px;background:linear-gradient(0deg,#0e1626,transparent)}
+  .input{flex:1;resize:none;max-height:160px;min-height:44px;background:#0d1626;color:#e9eef9;border:1px solid #1c2942;border-radius:10px;padding:10px}
+  .send{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 12px;cursor:pointer}
+  .side .foot{padding:10px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;color:#c9d3e5;font-size:12px}
+  .dot{width:8px;height:8px;border-radius:50%}.ok{background:#1ec27e}.off{background:#666}.warn{background:#f1c40f}
+
+  /* ===== Мобильные правила (ТАЙЛЬКО если НЕТ .force-desktop) ===== */
+  .menuBtn{display:none}
+  @media (max-width:700px){
+    body:not(.force-desktop) .app{grid-template-columns:1fr;height:100svh}
+    body:not(.force-desktop) .menuBtn{display:inline-flex}
+    body:not(.force-desktop) .side{position:fixed;left:0;top:0;bottom:0;width:86%;max-width:320px;transform:translateX(-100%);transition:transform .2s ease;z-index:100}
+    body:not(.force-desktop) .side.open{transform:translateX(0)}
+    body:not(.force-desktop) .backdrop{display:none}
+    body:not(.force-desktop) .backdrop.on{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:saturate(90%) blur(1px);z-index:90}
+    body:not(.force-desktop) .tabs{flex:1;justify-content:center}
+    body:not(.force-desktop) .select{padding:6px 8px}
+    body:not(.force-desktop) .msgs{padding:12px}
+    body:not(.force-desktop) .msg{margin-bottom:10px}
+    body:not(.force-desktop) .bubble{padding:10px 12px}
+    body:not(.force-desktop) .composer{padding:10px}
+    body:not(.force-desktop) .input{min-height:40px}
+  }
+
+  /* Жёсткий оверрайд для .force-desktop (гарантирует десктоп даже при узкой ширине) */
+  body.force-desktop .app{grid-template-columns:260px 1fr !important}
+  body.force-desktop .menuBtn{display:none !important}
+  body.force-desktop .side{position:static !important;transform:none !important;width:auto !important}
+  body.force-desktop .backdrop{display:none !important}
+
+  /* light overrides (как было) */
+  :root[data-theme="light"] .side{ border-right-color:#d7deec; }
+  :root[data-theme="light"] .head{ background:linear-gradient(180deg,#f5f8ff,transparent); border-bottom-color:#d7deec; }
+  :root[data-theme="light"] .composer{ background:linear-gradient(0deg,#f6f8ff,transparent); border-top-color:#d7deec; }
+  :root[data-theme="light"] .btn{ background:#e7ecf6; border-color:#c9d4ea; color:#0e1320; }
+  :root[data-theme="light"] .tab{ background:#eef2fb; border-color:#c9d4ea; color:#0e1320; }
+  :root[data-theme="light"] .tab.active{ background:#dfe7ff; border-color:#a9bce8; color:#0e1320; }
+  :root[data-theme="light"] .select{ background:#ffffff; border-color:#c9d4ea; color:#0e1320; }
+  :root[data-theme="light"] .msgs{ background:#ffffff; }
+  :root[data-theme="light"] .bubble{ background:#f7f9ff; border-color:#cfd8ea; color:#0e1320; }
+  :root[data-theme="light"] .me .bubble{ background:#eaf2ff; border-color:#b7c8e8; }
+  :root[data-theme="light"] .input{ background:#ffffff; border-color:#c9d4ea; color:#0e1320; }
+  :root[data-theme="light"] .send{ background:var(--accent); color:#ffffff; }
+  :root[data-theme="light"] .action{ background:#eef3ff; border-color:#c9d4ea; color:#0e1320; }
+  :root[data-theme="light"] .statusbar{background:#eef2fb;border-color:#c9d4ea;color:#0e1320}
+  /* panels (fix) */
+  .panel{display:none;padding:16px}
+  .panel.active{display:block}
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="backdrop" class="backdrop"></div>
+
+  <aside id="side" class="side" aria-label="Список чатов">
+    <div class="top">
+      <button id="newChat" class="btn">＋ Новый чат</button>
+      <button id="profileBtn" class="btn">Профиль</button>
+    </div>
+    <div class="search"><input id="chatFilter" placeholder="Поиск по чатам…"></div>
+    <div id="chats" class="chats"></div>
+    <div class="foot">
+      <span id="dotOnline" class="dot off"></span><span id="txtOnline">offline</span>
+      <span style="margin-left:auto"></span>
+      <span id="dotWeb" class="dot off"></span><span id="txtWeb">search off</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="head">
+      <button id="menuBtn" class="btn menuBtn" aria-label="Меню">☰</button>
+      <div class="brand">JARVIS</div>
+      <div class="tabs">
+        <div class="tab active" data-tab="chat">Чат</div>
+        <div class="tab" data-tab="profile">Профиль</div>
+      </div>
+      <div class="sep"></div>
+      <label style="font-size:12px;color:#a8b2c6">Стиль&nbsp;</label>
+      <select id="styleSel" class="select">
+        <option value="auto">auto</option>
+        <option value="friendly">friendly</option>
+        <option value="formal">formal</option>
+      </select>
+      <button id="themeBtn" class="btn" style="margin-left:8px">🌙 Тема</button>
+      <button id="intentBtn" class="btn" style="margin-left:8px">🎯 Интенты: выкл</button>
+      <button id="layoutToggle" class="btn" style="margin-left:8px">Режим: авто</button>
+    </div>
+
+    <div id="offlineBanner" class="banner"><span>🔌 Нет соединения с сервером.</span></div>
+
+    <div id="viewChat" class="panel active">
+      <div id="msgs" class="msgs"></div>
+      <div id="typing" class="typing">печатаю…</div>
+      <div id="statusbar" class="statusbar"></div>
+    </div>
+
+    <div id="viewProfile" class="panel">
+      <div class="row"><b>Состояние:</b> <span id="pfOnline" class="dot off"></span><span id="pfOnlineTxt">offline</span></div>
+      <div class="row"><b>Веб-поиск:</b> <span id="pfWeb" class="dot off"></span><span id="pfWebTxt">off</span></div>
+      <div class="row"><small>Телефон — мобильная версия. На Mac принудительно десктоп (можно переключить кнопкой «Режим»).</small></div>
+    </div>
+
+    <div class="composer">
+      <textarea id="input" class="input" placeholder="Напиши сообщение…" rows="1"></textarea>
+      <button id="send" class="send">Отправить</button>
+    </div>
+  </main>
+</div>
+
+<script>
+if (location.protocol === 'file:') { alert('Открой http://localhost:3000/ (не file://).'); }
+
+/* ===== РЕЖИМ ДЕСКТОП/АВТО ===== */
+const LAYOUT_KEY='jarvis.layout'; // 'auto' | 'desktop'
+function applyLayoutMode(mode){
+  if(mode==='desktop'){ document.body.classList.add('force-desktop'); }
+  else { document.body.classList.remove('force-desktop'); }
+  try{ localStorage.setItem(LAYOUT_KEY, mode); }catch{}
+  const btn=document.getElementById('layoutToggle'); if(btn){ btn.textContent = 'Режим: ' + (mode==='desktop'?'десктоп':'авто'); }
+}
+// авто-включение десктопа для Mac (если явного выбора нет)
+(function(){
+  const saved = localStorage.getItem(LAYOUT_KEY);
+  if (saved) return applyLayoutMode(saved);
+  const ua = navigator.userAgent || '';
+  const isMacDesktop = /Macintosh/.test(ua) && !/Mobile/.test(ua);
+  applyLayoutMode(isMacDesktop ? 'desktop' : 'auto');
+})();
+document.getElementById('layoutToggle').onclick = ()=>{
+  const cur = localStorage.getItem(LAYOUT_KEY) || 'auto';
+  applyLayoutMode(cur==='desktop' ? 'auto' : 'desktop');
+};
+
+/* ===== Тема и прочее (как было) ===== */
+function getTheme(){ try{return localStorage.getItem('jarvis.theme')||'dark';}catch{return 'dark';} }
+function applyTheme(t){ document.documentElement.setAttribute('data-theme', t); try{ localStorage.setItem('jarvis.theme', t);}catch{} if(themeBtn){ themeBtn.textContent=(t==='dark'?'🌙 Тема':'☀️ Тема'); } }
+const SKEY='jarvis.chats.v1', DRAFTS='jarvis.drafts.v1', INTENT_KEY='jarvis.intent.debug';
+let chats = loadChats(); let drafts = loadDrafts(); let currentId = chats.length ? chats[0].id : createChat('Новый диалог');
+function loadChats(){ try{ return JSON.parse(localStorage.getItem(SKEY)) || []; }catch{ return []; } }
+function saveChats(){ localStorage.setItem(SKEY, JSON.stringify(chats)); }
+function loadDrafts(){ try{ return JSON.parse(localStorage.getItem(DRAFTS)) || {}; }catch{ return {}; } }
+function saveDrafts(){ localStorage.setItem(DRAFTS, JSON.stringify(drafts)); }
+function createChat(title){ const id='c_'+Date.now(); chats.unshift({ id, title, msgs: [], pinned:false, updatedAt: Date.now() }); saveChats(); renderChats(); return id; }
+function setActive(id){ setDraft(currentId, elInput.value); currentId=id; renderChats(); renderMsgs(); elInput.value=getDraft(currentId); autoGrow(elInput); }
+function getDraft(id){ return drafts[id] || ''; }
+function setDraft(id, text){ drafts[id] = text || ''; saveDrafts(); }
+
+const elChats=document.getElementById('chats'), elMsgs=document.getElementById('msgs'), elTyping=document.getElementById('typing');
+const elInput=document.getElementById('input'), elSend=document.getElementById('send'), elStyle=document.getElementById('styleSel');
+const profileBtn=document.getElementById('profileBtn'), themeBtn=document.getElementById('themeBtn'), intentBtn=document.getElementById('intentBtn');
+const dotOn=document.getElementById('dotOnline'), txtOn=document.getElementById('txtOnline'); const dotWeb=document.getElementById('dotWeb'), txtWeb=document.getElementById('txtWeb');
+const pfOn=document.getElementById('pfOnline'), pfOnTxt=document.getElementById('pfOnlineTxt'); const pfWeb=document.getElementById('pfWeb'), pfWebTxt=document.getElementById('pfWebTxt');
+const tabs=document.querySelectorAll('.tab'); const viewChat=document.getElementById('viewChat'); const viewProfile=document.getElementById('viewProfile');
+const banner=document.getElementById('offlineBanner'); const chatFilter=document.getElementById('chatFilter');
+const menuBtn=document.getElementById('menuBtn'); const side=document.getElementById('side'); const backdrop=document.getElementById('backdrop');
+
+function openSide(){ side.classList.add('open'); backdrop.classList.add('on'); }
+function closeSide(){ side.classList.remove('open'); backdrop.classList.remove('on'); }
+menuBtn?.addEventListener('click', ()=> openSide());
+backdrop?.addEventListener('click', ()=> closeSide());
+function switchTab(name){ tabs.forEach(t=> t.classList.toggle('active', t.dataset.tab===name)); viewChat.classList.toggle('active', name==='chat'); viewProfile.classList.toggle('active', name==='profile'); if (window.matchMedia('(max-width:700px)').matches && !document.body.classList.contains('force-desktop')) closeSide(); }
+tabs.forEach(t => t.onclick = ()=> switchTab(t.dataset.tab));
+profileBtn.onclick = ()=> { switchTab('profile'); if (window.matchMedia('(max-width:700px)').matches && !document.body.classList.contains('force-desktop')) closeSide(); };
+if(themeBtn){ themeBtn.onclick = ()=>{ const next=(getTheme()==='dark'?'light':'dark'); applyTheme(next); }; }
+function getIntentDebug(){ try{return localStorage.getItem(INTENT_KEY)==='1';}catch{return false;} }
+function setIntentDebug(v){ try{ localStorage.setItem(INTENT_KEY, v?'1':'0'); }catch{} if (intentBtn) intentBtn.textContent='🎯 Интенты: '+(v?'вкл':'выкл'); }
+if(intentBtn){ intentBtn.onclick=()=>{ setIntentDebug(!getIntentDebug()); renderMsgs(); }; }
+function setDot(el, state){ el.className='dot '+(state||'off'); }
+function fmtTime(d=new Date()){ return d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }
+function setStatus(text){ const sb=document.getElementById('statusbar'); if(!text){ sb.classList.remove('on'); sb.textContent=''; return;} sb.textContent=text; sb.classList.add('on'); }
+
+function renderChats(){
+  elChats.innerHTML='';
+  const q=(chatFilter?.value||'').toLowerCase().trim();
+  const filtered = chats.filter(c=>{
+    if(!q) return true;
+    return (c.title||'').toLowerCase().includes(q) || (c.msgs||[]).some(m=>(m.text||'').toLowerCase().includes(q));
+  });
+  filtered.sort((a,b)=>{ if ((b.pinned?1:0)!==(a.pinned?1:0)) return (b.pinned?1:0)-(a.pinned?1:0); return (b.updatedAt||0)-(a.updatedAt||0); });
+  const pinned = filtered.filter(c=>c.pinned); const others = filtered.filter(c=>!c.pinned);
+  function addSection(title, items){
+    if(!items.length) return;
+    const h=document.createElement('div'); h.className='sectionTitle'; h.textContent=title; elChats.appendChild(h);
+    items.forEach(c=>{
+      const row=document.createElement('div'); row.className='chat-item'+(c.id===currentId?' active':''); row.onclick=()=> { setActive(c.id); if (window.matchMedia('(max-width:700px)').matches && !document.body.classList.contains('force-desktop')) closeSide(); };
+      const titleEl=document.createElement('div'); titleEl.className='chat-title'; titleEl.textContent=c.title||'Без названия';
+      const pin=document.createElement('span'); pin.className='pin'; pin.title=c.pinned?'Открепить':'Закрепить'; pin.textContent = c.pinned ? '📌' : '📍';
+      pin.onclick=(e)=>{ e.stopPropagation(); c.pinned=!c.pinned; saveChats(); renderChats(); };
+      const del=document.createElement('span'); del.className='del'; del.title='Удалить'; del.textContent='✕';
+      del.onclick=(e)=>{ e.stopPropagation(); chats = chats.filter(x=>x.id!==c.id); saveChats(); renderChats(); renderMsgs(); };
+      row.appendChild(titleEl); row.appendChild(pin); row.appendChild(del); elChats.appendChild(row);
+    });
+  }
+  addSection('Закреплённые', pinned); addSection('Остальные', others);
+}
+function makeLinkCard(urlStr){ try{ const u=new URL(urlStr); const dom=u.hostname.replace(/^www\./,''); const fav='https://www.google.com/s2/favicons?sz=64&domain='+u.hostname; const card=document.createElement('div'); card.className='linkcard'; const img=document.createElement('img'); img.src=fav; img.alt=''; const span=document.createElement('span'); span.className='dom'; span.textContent=dom; const a=document.createElement('a'); a.href=urlStr; a.target='_blank'; a.className='action'; a.textContent='Открыть'; card.appendChild(img); card.appendChild(span); card.appendChild(a); return card; }catch{ return null; } }
+function renderMsgs(){
+  const chat=chats.find(c=>c.id===currentId); elMsgs.innerHTML=''; if(!chat) return;
+  const showIntent=getIntentDebug();
+  chat.msgs.forEach(m=>{
+    const wrap=document.createElement('div'); wrap.className='msg '+(m.who==='user'?'me':'bot');
+    const bubble=document.createElement('div'); bubble.className='bubble'; bubble.textContent=m.text||'—';
+    if(m.who==='bot'){ const copy=document.createElement('button'); copy.className='btn'; copy.style.cssText='position:absolute;top:8px;right:8px;padding:4px 8px;font-size:12px;background:#0d1626;border:1px solid #1c2942;border-radius:8px;color:#cbd3e5'; copy.textContent='Копировать'; copy.onclick=async()=>{ try{ await navigator.clipboard.writeText(m.text||''); }catch{} }; bubble.appendChild(copy); }
+    wrap.appendChild(bubble);
+    if(m.actions?.length){ const actWrap=document.createElement('div'); actWrap.className='actions';
+      m.actions.forEach(a=>{ if(a.type==='open_url' && a.url){ const card=makeLinkCard(a.url); if(card) actWrap.appendChild(card); else { const link=document.createElement('a'); link.href=a.url; link.target='_blank'; link.className='action'; link.textContent='Открыть ссылку'; actWrap.appendChild(link); } } });
+      wrap.appendChild(actWrap);
+    }
+    const meta=document.createElement('div'); meta.className='meta'; meta.textContent=fmtTime(new Date(m.ts||Date.now()));
+    if (showIntent && m.who==='bot' && m.intent){ const b=document.createElement('span'); b.className='ibadge'; b.textContent=m.intent; meta.appendChild(document.createTextNode(' · ')); meta.appendChild(b); }
+    wrap.appendChild(meta);
+    elMsgs.appendChild(wrap);
+  });
+  elMsgs.scrollTop = elMsgs.scrollHeight;
+}
+
+let lastMeta={online:false, web:false};
+async function refreshMeta(){
+  try{
+    const r=await fetch('/api/meta',{cache:'no-store'}); const m=await r.json(); const online=m.status==='online';
+    lastMeta={online, web:!!m.web_search_enabled};
+    setDot(dotOn, online?'ok':'off'); txtOn.textContent= online?'online':'offline';
+    setDot(dotWeb, m.web_search_enabled?'ok':'off'); txtWeb.textContent= m.web_search_enabled?'search on':'search off';
+    setDot(pfOn, online?'ok':'off'); pfOnTxt.textContent= online?'online':'offline';
+    setDot(pfWeb, m.web_search_enabled?'ok':'off'); pfWebTxt.textContent= m.web_search_enabled?'on':'off';
+    banner.style.display = online?'none':'flex';
+  }catch{
+    lastMeta={online:false, web:false};
+    setDot(dotOn,'off'); txtOn.textContent='offline';
+    setDot(dotWeb,'off'); txtWeb.textContent='search off';
+    setDot(pfOn,'off'); pfOnTxt.textContent='offline';
+    setDot(pfWeb,'off'); pfWebTxt.textContent='off';
+    banner.style.display='flex';
+  }
+}
+
+function addMsg(who,text,actions,intent){
+  const chat=chats.find(c=>c.id===currentId); if(!chat) return;
+  chat.msgs.push({who,text,actions:actions||[],intent:intent||"",ts:Date.now()});
+  if (who==='user' && (!chat.title || chat.title==='Новый диалог')) chat.title=(text||'Новый диалог').slice(0,40);
+  chat.updatedAt = Date.now();
+  saveChats(); renderMsgs(); renderChats();
+}
+async function send(){
+  const text=elInput.value.trim(); if(!text) return;
+  addMsg('user',text); setDraft(currentId,''); elInput.value=''; autoGrow(elInput);
+  elTyping.classList.add('on'); elSend.disabled=true; setStatus('⏳ Обрабатываю запрос…');
+  const t0=performance.now();
+  try{
+    const res=await fetch('/api/assist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:text, styleLock: elStyle.value})});
+    const data=await res.json();
+    elTyping.classList.remove('on'); elSend.disabled=false;
+    addMsg('bot', data.reply || '—', data.actions||[], data.intent||"");
+    const took = (data.meta?.tookMs ?? (performance.now()-t0)).toFixed(0);
+    const provider = data.meta?.provider || 'local';
+    const ok = (data.meta?.ok !== false);
+    setStatus(`${ok?'✅':'⚠️'} ⏱ ${took} мс · источник: ${provider} · интент: ${data.intent||'-'}`);
+  }catch{
+    elTyping.classList.remove('on'); elSend.disabled=false;
+    addMsg('bot','⚠️ Не удалось связаться с сервером.',[], "ERROR");
+    setStatus('❌ Ошибка сети/сервера');
+  }
+}
+
+function autoGrow(t){ t.style.height='auto'; t.style.height=Math.min(160,Math.max(44,t.scrollHeight))+'px'; }
+document.getElementById('send').onclick=send;
+document.getElementById('input').addEventListener('keydown',e=>{ autoGrow(e.target); if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); }});
+document.getElementById('input').addEventListener('input',e=>{ autoGrow(e.target); setDraft(currentId,e.target.value); });
+document.getElementById('newChat').onclick=()=> { setActive(createChat('Новый диалог')); if (window.matchMedia('(max-width:700px)').matches && !document.body.classList.contains('force-desktop')) closeSide(); };
+
+applyTheme(getTheme()); setIntentDebug(localStorage.getItem(INTENT_KEY)==='1');
+renderChats(); renderMsgs(); refreshMeta();
+const helloMsg='Привет! Я на связи. Спроси что-нибудь 😉';
+(function firstHello(){ const chat=chats.find(c=>c.id===currentId); if(!chat||!chat.msgs||chat.msgs.length===0){ addMsg('bot',helloMsg,[], "GREETING"); }})();
+elInput.value=getDraft(currentId); autoGrow(elInput);
+</script>
+</body>
+</html>
