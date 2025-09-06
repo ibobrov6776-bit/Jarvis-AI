@@ -251,7 +251,8 @@ app.post("/api/assist", async (req,res)=>{
 });
 
 /* ---------- start ---------- */
-app.listen(PORT, ()=> {
+const PORT=process.env.PORT||3000;
+app.listen(PORT,()=>console.log())=> {
   const k = getKey();
   console.log(`BRAVE len=${k.len} ascii=${k.ascii}`);
   console.log(`✅ Server ready: http://localhost:${PORT}`);
